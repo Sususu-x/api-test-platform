@@ -1,0 +1,17 @@
+# Allure 报告
+allure_results/
+allure_report/
+
+# Python
+__pycache__/
+*.pyc
+venv/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+
+# 数据库文件
+*.db
