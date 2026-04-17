@@ -1,6 +1,8 @@
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+
+from routers import environment_router
 from database import engine
 import models
 from routers import case_router
@@ -23,6 +25,9 @@ app.add_middleware(
 )
 # 挂载用例路由
 app.include_router(case_router.router)
+
+# 注册环境管理路由  ← 关键！！！
+app.include_router(environment_router.router)
 
 # 挂载Allure报告目录为静态文件
 app.mount("/allure-report", StaticFiles(directory="allure_report", html=True), name="allure_report")

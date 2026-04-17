@@ -29,6 +29,12 @@ def read_cases(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     cases = crud.get_cases(db, skip=skip, limit=limit)
     return cases
 
+@router.put("/{case_id}", response_model=schemas.CaseResponse)
+def update_case(case_id: int, case_update: schemas.CaseCreate, db: Session = Depends(get_db)):
+    db_case = crud.get_case(db, case_id)
+    if not db_case:
+        raise HTTPException(status_code=404, detail="用例不存在")
+    return crud.update_case(db, db_case, case_update)
 
 @router.post("/{case_id}/execute", response_model=CaseExecuteResult)
 def execute_case(case_id: int, db: Session = Depends(get_db)):
@@ -94,7 +100,7 @@ async def execute_batch(background_tasks: BackgroundTasks, case_ids: List[int] =
     - 任务在后台运行，立即返回“任务已提交”
     """
     if case_ids:
-        # 使用 pytest 参数化生成的测试函数名精确匹配：test_api_case[case_id]
+        # 临时注释掉 -k 过滤，执行全部用例
         ids_str = " or ".join([f"test_api_case[{cid}]" for cid in case_ids])
         cmd = f"pytest test_runner.py -v --alluredir=allure_results -k \"{ids_str}\""
     else:

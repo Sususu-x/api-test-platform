@@ -1,6 +1,6 @@
 # API请求/响应的数据结构（Pydantic模型）
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
 from datetime import datetime
 
@@ -32,8 +32,7 @@ class CaseResponse(BaseModel):
     assert_target: Optional[str]
 
     # 告诉Pydantic可以从ORM对象直接转换
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 #CaseCreate是输入模型，CaseResponse是输出模型。FastAPI会根据这些模型自动校验数据格式。
 
@@ -48,3 +47,25 @@ class CaseExecuteResult(BaseModel):
     response_match: bool                  # 响应内容是否包含关键词
     passed: bool                          # 整体是否通过
     execution_time_ms: int                # 执行耗时（毫秒）
+
+# ---------- 环境配置相关 ----------
+class EnvironmentBase(BaseModel):
+    name: str
+    base_url: str
+    global_headers: Optional[str] = None
+    is_active: bool = False
+
+class EnvironmentCreate(EnvironmentBase):
+    pass
+
+class EnvironmentUpdate(BaseModel):
+    name: Optional[str] = None
+    base_url: Optional[str] = None
+    global_headers: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class EnvironmentResponse(EnvironmentBase):
+    id: int
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

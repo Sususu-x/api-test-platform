@@ -1,12 +1,17 @@
 import pytest
 import requests
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from urllib.parse import urlparse
 import json
 import re
-from jsonpath_ng import parse
 import allure
+from urllib.parse import urlparse
+from jsonpath_ng import parse
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+# 导入数据库会话和 CRUD 函数
+from database import SessionLocal
+from crud import get_active_environment
+
 
 # 数据库连接（和database.py里一样）
 DATABASE_URL = "mysql+pymysql://root:GNL20040215@localhost:3306/api_test_platform?charset=utf8mb4"
@@ -27,6 +32,8 @@ def get_all_cases():
 case_list = get_all_cases()
 case_ids = [case.id for case in case_list]
 
+if not case_ids:
+    pytest.skip("数据库中没有用例，跳过测试")
 
 @pytest.mark.parametrize("case_id", case_ids)
 def test_api_case(case_id):
@@ -43,20 +50,42 @@ def test_api_case(case_id):
     allure.dynamic.title(case.name)
     allure.dynamic.description(f"请求方法: {case.method} | URL: {case.url}")
 
-    # 准备请求参数
-    headers = json.loads(case.headers) if case.headers else {}
+    # 获取激活环境
+    db = SessionLocal()
+    env = get_active_environment(db)
+    db.close()
+
+    # 拼接完整 URL
+    full_url = case.url
+    if env and not case.url.startswith(('http://', 'https://')):
+        full_url = env.base_url.rstrip('/') + '/' + case.url.lstrip('/')
+
+    # 准备请求头（合并全局头）
+    headers = {}
+    if env and env.global_headers:
+        try:
+            headers.update(json.loads(env.global_headers))
+        except:
+            pass
+    if case.headers:
+        try:
+            headers.update(json.loads(case.headers))
+        except:
+            pass
+
+    # 准备请求体
     body = json.loads(case.request_body) if case.request_body else None
 
-    # 校验URL格式
-    parsed = urlparse(case.url)
+    # 校验 URL 格式（使用拼接后的 full_url）
+    parsed = urlparse(full_url)
     if not parsed.scheme:
-        pytest.fail(f"URL格式错误：缺少协议头（http/https），当前值为 '{case.url}'")
+        pytest.fail(f"URL格式错误：缺少协议头（http/https），当前值为 '{full_url}'")
 
     # ========== 步骤1：发送HTTP请求 ==========
     with allure.step(f"发送 {case.method} 请求"):
         # 附加请求详情（完整信息）
         request_detail = (
-            f"URL: {case.url}\n"
+            f"URL: {full_url}\n"
             f"Method: {case.method}\n"
             f"Headers: {json.dumps(headers, indent=2, ensure_ascii=False) if headers else '无'}\n"
             f"Body: {json.dumps(body, indent=2, ensure_ascii=False) if body else '无'}"
@@ -65,13 +94,13 @@ def test_api_case(case_id):
 
         try:
             if case.method.upper() == "GET":
-                resp = requests.get(case.url, headers=headers, timeout=10)
+                resp = requests.get(full_url, headers=headers, timeout=10)
             elif case.method.upper() == "POST":
-                resp = requests.post(case.url, headers=headers, json=body, timeout=10)
+                resp = requests.post(full_url, headers=headers, json=body, timeout=10)
             elif case.method.upper() == "PUT":
-                resp = requests.put(case.url, headers=headers, json=body, timeout=10)
+                resp = requests.put(full_url, headers=headers, json=body, timeout=10)
             elif case.method.upper() == "DELETE":
-                resp = requests.delete(case.url, headers=headers, timeout=10)
+                resp = requests.delete(full_url, headers=headers, timeout=10)
             else:
                 pytest.fail(f"不支持的请求方法: {case.method}")
         except Exception as e:

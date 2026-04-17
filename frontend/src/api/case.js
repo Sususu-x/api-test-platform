@@ -10,6 +10,8 @@ export const createCase = (data) => {
   return request.post('/api/cases/', data)
 }
 
+export const updateCase = (id, data) => request.put(`/api/cases/${id}`, data)
+
 // 批量执行用例
 export const executeBatch = (caseIds) => {
   return request.post('/api/cases/execute-batch', caseIds)

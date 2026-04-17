@@ -1,5 +1,5 @@
 # 数据库表对应的Python类（ORM模型）
-from sqlalchemy import Column, Integer, String, Text, DateTime
+from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean
 from sqlalchemy.sql import func
 from database import Base
 
@@ -20,3 +20,11 @@ class ApiCase(Base):
     assert_target = Column(String(200), nullable=True)
 
 #通过这个类，可以用db.add(ApiCase(name="测试", url="/test"))来插入数据，而不用写INSERT语句。
+class Environment(Base):
+    __tablename__ = "environment"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(50), nullable=False)
+    base_url = Column(String(200), nullable=False)
+    global_headers = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=False)
+    created_at = Column(DateTime, server_default=func.now())

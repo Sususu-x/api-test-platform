@@ -1,15 +1,23 @@
 <template>
   <div class="app-container">
     <h1>🚀 API自动化测试平台</h1>
-    
+
     <el-card class="action-card">
       <el-button type="primary" @click="dialogVisible = true">➕ 新增用例</el-button>
       <el-button type="success" @click="executeBatch">▶️ 批量执行选中</el-button>
       <el-button type="info" @click="openReport">📊 查看测试报告</el-button>
     </el-card>
-
-    <el-table 
-      :data="caseList" 
+    <div style="display: flex; align-items: center; gap: 10px;">
+  <el-select v-model="activeEnvId" placeholder="选择环境" @change="switchEnv" style="width: 180px;">
+    <el-option v-for="env in envList" :key="env.id" :label="env.name" :value="env.id">
+      <span>{{ env.name }}</span>
+      <span v-if="env.is_active" style="color: #67C23A; margin-left: 5px;">(当前)</span>
+    </el-option>
+  </el-select>
+  <el-button @click="envDialogVisible = true; resetEnvForm()">⚙️ 环境配置</el-button>
+</div>
+    <el-table
+      :data="caseList"
       @selection-change="handleSelectionChange"
       v-loading="loading"
       border
@@ -27,6 +35,11 @@
       <el-table-column prop="assert_type" label="断言类型" width="120">
   <template #default="{ row }">
     <el-tag size="small">{{ row.assert_type }}</el-tag>
+  </template>
+</el-table-column>
+      <el-table-column label="操作" width="150">
+  <template #default="{ row }">
+    <el-button type="primary" size="small" @click="editCase(row)">编辑</el-button>
   </template>
 </el-table-column>
     </el-table>
@@ -80,6 +93,44 @@
         <el-button type="primary" @click="createCase">确定</el-button>
       </template>
     </el-dialog>
+    <el-dialog v-model="envDialogVisible" title="环境配置" width="700px">
+  <el-table :data="envList" style="margin-bottom: 20px;">
+    <el-table-column prop="name" label="名称"></el-table-column>
+    <el-table-column prop="base_url" label="Base URL"></el-table-column>
+    <el-table-column label="激活" width="80">
+      <template #default="{ row }">
+        <el-tag v-if="row.is_active" type="success">激活</el-tag>
+      </template>
+    </el-table-column>
+    <el-table-column label="操作" width="150">
+      <template #default="{ row }">
+        <el-button type="primary" size="small" @click="editEnv(row)">编辑</el-button>
+        <el-button type="danger" size="small" @click="deleteEnv(row)">删除</el-button>
+      </template>
+    </el-table-column>
+  </el-table>
+
+  <el-divider>添加 / 编辑环境</el-divider>
+
+  <el-form :model="envForm" label-width="100px">
+    <el-form-item label="环境名称">
+      <el-input v-model="envForm.name" placeholder="如：开发环境"></el-input>
+    </el-form-item>
+    <el-form-item label="Base URL">
+      <el-input v-model="envForm.base_url" placeholder="如 https://api.example.com"></el-input>
+    </el-form-item>
+    <el-form-item label="全局请求头">
+      <el-input v-model="envForm.global_headers" type="textarea" :rows="3" placeholder='JSON格式，如 {"Authorization": "Bearer xxx"}'></el-input>
+    </el-form-item>
+    <el-form-item label="设为激活">
+      <el-switch v-model="envForm.is_active"></el-switch>
+    </el-form-item>
+  </el-form>
+  <template #footer>
+    <el-button @click="envDialogVisible = false">取消</el-button>
+    <el-button type="primary" @click="saveEnvironment">保存</el-button>
+  </template>
+</el-dialog>
   </div>
 </template>
 
@@ -87,6 +138,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getCases, createCase as apiCreateCase, executeBatch as apiExecuteBatch } from './api/case'
+import { getEnvironments, createEnvironment, updateEnvironment, deleteEnvironment, activateEnvironment } from './api/environment'
 
 const caseList = ref([])
 const loading = ref(false)
@@ -94,12 +146,23 @@ const selectedCases = ref([])
 
 const dialogVisible = ref(false)
 const form = reactive({
+  id: null,
   name: '',
   url: '',
   method: 'GET',
   expected_status: 200,
   expected_response: '',      // 用于 contains 类型的关键词
   expected_value: ''          // 用于 jsonpath 的比对值
+})
+const envList = ref([])
+const activeEnvId = ref(null)
+const envDialogVisible = ref(false)
+const envForm = reactive({
+  id: null,
+  name: '',
+  base_url: '',
+  global_headers: '',
+  is_active: false
 })
 
 const fetchCases = async () => {
@@ -171,6 +234,56 @@ const createCase = async () => {
   }
 }
 
+const editCase = (row) => {
+  Object.assign(form, {
+    id: row.id,
+    name: row.name,
+    url: row.url,
+    method: row.method,
+    assert_type: row.assert_type,
+    assert_target: row.assert_target,
+    expected_status: row.expected_status,
+    expected_response: row.expected_response,
+    expected_value: row.assert_type === 'jsonpath' ? row.expected_response : ''
+  })
+  dialogVisible.value = true
+}
+
+const saveCase = async () => {
+  const payload = {
+    name: form.name,
+    url: form.url,
+    method: form.method,
+    expected_status: form.expected_status,
+    assert_type: form.assert_type,
+    assert_target: form.assert_type !== 'contains' ? form.assert_target : null,
+    expected_response: ''
+  }
+
+  if (form.assert_type === 'contains') {
+    payload.expected_response = form.expected_response
+  } else if (form.assert_type === 'jsonpath') {
+    payload.expected_response = form.expected_value
+  } else if (form.assert_type === 'regex') {
+    payload.expected_response = form.assert_target
+  }
+
+  try {
+    if (form.id) {
+      await updateCase(form.id, payload)
+      ElMessage.success('用例更新成功')
+    } else {
+      await apiCreateCase(payload)
+      ElMessage.success('用例创建成功')
+    }
+    dialogVisible.value = false
+    resetForm()
+    fetchCases()
+  } catch (error) {
+    ElMessage.error('保存失败')
+  }
+}
+
 const executeBatch = async () => {
   if (selectedCases.value.length === 0) {
     ElMessage.warning('请先选择要执行的用例')
@@ -194,8 +307,81 @@ const openReport = () => {
   window.open('http://localhost:8000/allure-report/', '_blank')
 }
 
+const fetchEnvironments = async () => {
+  try {
+    envList.value = await getEnvironments()
+    const activeEnv = envList.value.find(e => e.is_active)
+    if (activeEnv) activeEnvId.value = activeEnv.id
+  } catch (error) {
+    ElMessage.error('获取环境列表失败')
+  }
+}
+
+const switchEnv = async (envId) => {
+  try {
+    await activateEnvironment(envId)
+    ElMessage.success('环境已切换')
+    fetchEnvironments()
+  } catch (error) {
+    ElMessage.error('切换失败')
+  }
+}
+
+const saveEnvironment = async () => {
+  const payload = {
+    name: envForm.name,
+    base_url: envForm.base_url,
+    global_headers: envForm.global_headers,
+    is_active: envForm.is_active
+  }
+  try {
+    if (envForm.id) {
+      await updateEnvironment(envForm.id, payload)
+    } else {
+      await createEnvironment(payload)
+    }
+    ElMessage.success('保存成功')
+    envDialogVisible.value = false
+    fetchEnvironments()
+    resetEnvForm()
+  } catch (error) {
+    ElMessage.error('保存失败')
+  }
+}
+
+const resetEnvForm = () => {
+  Object.assign(envForm, {
+    id: null,
+    name: '',
+    base_url: '',
+    global_headers: '',
+    is_active: false
+  })
+}
+
+const editEnv = (env) => {
+  Object.assign(envForm, {
+    id: env.id,
+    name: env.name,
+    base_url: env.base_url,
+    global_headers: env.global_headers,
+    is_active: env.is_active
+  })
+}
+
+const deleteEnv = async (env) => {
+  try {
+    await ElMessageBox.confirm('确定删除该环境吗？', '提示', { type: 'warning' })
+    await deleteEnvironment(env.id)
+    ElMessage.success('删除成功')
+    fetchEnvironments()
+  } catch (error) {
+    if (error !== 'cancel') ElMessage.error('删除失败')
+  }
+}
+
 onMounted(() => {
-  fetchCases()
+  fetchCases(), fetchEnvironments()
 })
 </script>
 
