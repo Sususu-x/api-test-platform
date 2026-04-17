@@ -1,3 +1,4 @@
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from database import engine
@@ -8,6 +9,18 @@ models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="API自动化测试平台", version="1.0.0")
 
+origins = [
+    "http://localhost:5173",  # Vue 开发服务器的默认端口
+    "http://127.0.0.1:5173"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 # 挂载用例路由
 app.include_router(case_router.router)
 

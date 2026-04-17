@@ -13,6 +13,8 @@ class CaseCreate(BaseModel):
     request_body: Optional[str] = None
     expected_status: Optional[int] = None
     expected_response: Optional[str] = None
+    assert_type: str = "contains"
+    assert_target: Optional[str] = None
 
 # 返回给前端的用例数据（包含id和创建时间等）
 class CaseResponse(BaseModel):
@@ -26,6 +28,8 @@ class CaseResponse(BaseModel):
     expected_response: Optional[str]
     created_at: datetime
     updated_at: datetime
+    assert_type: str
+    assert_target: Optional[str]
 
     # 告诉Pydantic可以从ORM对象直接转换
     class Config:

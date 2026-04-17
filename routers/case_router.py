@@ -13,6 +13,7 @@ from schemas import CaseExecuteResult
 from fastapi import BackgroundTasks
 import subprocess
 import os
+import shutil
 
 # 创建路由器，所有接口以 /api/cases 开头
 router = APIRouter(prefix="/api/cases", tags=["cases"])
@@ -92,11 +93,24 @@ async def execute_batch(background_tasks: BackgroundTasks, case_ids: List[int] =
     - 如果不传case_ids，默认执行全部用例
     - 任务在后台运行，立即返回“任务已提交”
     """
-    # 先不支持按ID筛选，等修复表达式问题再加回来
-    cmd = "pytest test_runner.py -v --alluredir=allure_results"
+    if case_ids:
+        # 使用 pytest 参数化生成的测试函数名精确匹配：test_api_case[case_id]
+        ids_str = " or ".join([f"test_api_case[{cid}]" for cid in case_ids])
+        cmd = f"pytest test_runner.py -v --alluredir=allure_results -k \"{ids_str}\""
+    else:
+        cmd = "pytest test_runner.py -v --alluredir=allure_results"
 
     def run_pytest():
+        # 清空历史结果目录
+        results_dir = "allure_results"
+        if os.path.exists(results_dir):
+            shutil.rmtree(results_dir)
+        os.makedirs(results_dir, exist_ok=True)
+
+        # 执行 pytest，生成新结果
         subprocess.run(cmd, shell=True, cwd=os.getcwd())
+
+        # 生成报告
         subprocess.run("allure generate allure_results -o allure_report --clean", shell=True, cwd=os.getcwd())
 
     background_tasks.add_task(run_pytest)

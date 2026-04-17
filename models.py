@@ -16,5 +16,7 @@ class ApiCase(Base):
     expected_response = Column(Text, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    assert_type = Column(String(20), default='contains')
+    assert_target = Column(String(200), nullable=True)
 
 #通过这个类，可以用db.add(ApiCase(name="测试", url="/test"))来插入数据，而不用写INSERT语句。
