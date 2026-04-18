@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: test_platform_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: GNL20040215
+      MYSQL_DATABASE: api_test_platform
+      MYSQL_ROOT_HOST: '%'
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password   # ← 添加这一行
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 10s
+      retries: 5
+
+  backend:
+    build: ./backend
+    container_name: test_platform_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: mysql+pymysql://root:GNL20040215@mysql:3306/api_test_platform?charset=utf8mb4
+    volumes:
+      - ./backend/allure_results:/app/allure_results
+      - ./backend/allure_report:/app/allure_report
+
+  frontend:
+    build: ./frontend
+    container_name: test_platform_frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data:

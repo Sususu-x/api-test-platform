@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.env
+*.db
+*.sqlite3
+
+# Allure 报告
+backend/allure_results/
+allure_report/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# 前端
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+
+# Docker
+*.log

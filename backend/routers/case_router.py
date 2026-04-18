@@ -107,17 +107,31 @@ async def execute_batch(background_tasks: BackgroundTasks, case_ids: List[int] =
         cmd = "pytest test_runner.py -v --alluredir=allure_results"
 
     def run_pytest():
-        # 清空历史结果目录
+        import glob
+        import shutil
         results_dir = "allure_results"
+        report_dir = "allure_report"
+
+        # 安全清理旧结果：只删除文件/子目录，不删除 allure_results 目录本身
         if os.path.exists(results_dir):
-            shutil.rmtree(results_dir)
+            for item in glob.glob(os.path.join(results_dir, "*")):
+                try:
+                    if os.path.isfile(item):
+                        os.remove(item)
+                    elif os.path.isdir(item):
+                        shutil.rmtree(item, ignore_errors=True)
+                except Exception as e:
+                    print(f"清理旧文件失败 {item}: {e}")
+        else:
+            os.makedirs(results_dir, exist_ok=True)
+
         os.makedirs(results_dir, exist_ok=True)
 
-        # 执行 pytest，生成新结果
+        # 执行 pytest
         subprocess.run(cmd, shell=True, cwd=os.getcwd())
 
-        # 生成报告
-        subprocess.run("allure generate allure_results -o allure_report --clean", shell=True, cwd=os.getcwd())
+        # 生成 Allure 报告
+        subprocess.run(f"allure generate {results_dir} -o {report_dir} --clean", shell=True, cwd=os.getcwd())
 
     background_tasks.add_task(run_pytest)
 

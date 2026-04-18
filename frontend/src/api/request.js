@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 const request = axios.create({
-  baseURL: 'http://localhost:8000', // 后端地址
+  baseURL: '/api',   // 关键：相对路径，由 Nginx 代理到后端
   timeout: 30000
 })
 

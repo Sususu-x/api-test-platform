@@ -1,3 +1,4 @@
+import os
 import pytest
 import requests
 import json
@@ -5,23 +6,12 @@ import re
 import allure
 from urllib.parse import urlparse
 from jsonpath_ng import parse
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
-# 导入数据库会话和 CRUD 函数
 from database import SessionLocal
 from crud import get_active_environment
-
-
-# 数据库连接（和database.py里一样）
-DATABASE_URL = "mysql+pymysql://root:GNL20040215@localhost:3306/api_test_platform?charset=utf8mb4"
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(bind=engine)
-
+from models import ApiCase
 
 def get_all_cases():
-    """从数据库获取所有用例"""
-    from models import ApiCase
     db = SessionLocal()
     cases = db.query(ApiCase).all()
     db.close()
