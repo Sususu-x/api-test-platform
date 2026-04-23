@@ -44,7 +44,7 @@
 </el-table-column>
     </el-table>
 
-    <el-dialog v-model="dialogVisible" title="新增测试用例" width="500px">
+    <el-dialog v-model="dialogVisible" :title="form.id ? '编辑用例' : '新增用例'" width="600px">
       <el-form :model="form" label-width="100px">
         <el-form-item label="用例名称">
           <el-input v-model="form.name" placeholder="例如: 获取文章1"></el-input>
@@ -89,10 +89,45 @@
 </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false; resetForm()">取消</el-button>
-        <el-button type="primary" @click="createCase">确定</el-button>
+    <el-button @click="dialogVisible = false; resetForm()">取消</el-button>
+    <el-button type="success" @click="openAIDialog">🤖 AI 生成</el-button>
+    <el-button type="primary" @click="saveCase">确定</el-button>
       </template>
     </el-dialog>
+    <!-- AI 生成弹窗 -->
+<el-dialog v-model="aiDialogVisible" title="AI 生成测试用例" width="500px">
+  <el-form label-width="80px">
+    <el-form-item label="接口描述">
+      <el-input
+        v-model="aiDescription"
+        type="textarea"
+        :rows="4"
+        placeholder="例如：用户登录接口，POST /api/login，参数 username 和 password，成功返回 token"
+      />
+    </el-form-item>
+    <el-form-item>
+      <el-button type="success" @click="generateByAI" :loading="aiLoading" style="width: 100%;">
+        🤖 生成用例
+      </el-button>
+    </el-form-item>
+    <el-form-item label="选择用例" v-if="aiGeneratedCases.length > 0">
+      <el-select v-model="aiCaseIndex" placeholder="请选择要使用的用例" style="width: 100%;">
+        <el-option
+          v-for="(c, idx) in aiGeneratedCases"
+          :key="idx"
+          :label="`${idx + 1}. ${c.name}`"
+          :value="idx"
+        />
+      </el-select>
+    </el-form-item>
+  </el-form>
+  <template #footer>
+    <el-button @click="aiDialogVisible = false">取消</el-button>
+    <el-button type="primary" @click="applyAICase" :disabled="aiGeneratedCases.length === 0">
+      应用选中用例
+    </el-button>
+  </template>
+</el-dialog>
     <el-dialog v-model="envDialogVisible" title="环境配置" width="700px">
   <el-table :data="envList" style="margin-bottom: 20px;">
     <el-table-column prop="name" label="名称"></el-table-column>
@@ -139,10 +174,26 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getCases, createCase as apiCreateCase, executeBatch as apiExecuteBatch } from './api/case'
 import { getEnvironments, createEnvironment, updateEnvironment, deleteEnvironment, activateEnvironment } from './api/environment'
+import { generateCases } from './api/ai'
 
 const caseList = ref([])
 const loading = ref(false)
 const selectedCases = ref([])
+// AI 相关状态
+const aiDialogVisible = ref(false)
+const aiDescription = ref('')
+const aiLoading = ref(false)
+const aiGeneratedCases = ref([])
+const aiCaseIndex = ref(0)
+
+// 打开 AI 生成弹窗
+const openAIDialog = async () => {
+  aiDescription.value = ''
+  aiGeneratedCases.value = []
+  aiCaseIndex.value = 0
+  aiDialogVisible.value = true
+}
+
 
 const dialogVisible = ref(false)
 const form = reactive({
@@ -378,6 +429,65 @@ const deleteEnv = async (env) => {
   } catch (error) {
     if (error !== 'cancel') ElMessage.error('删除失败')
   }
+}
+
+// 调用 AI 生成
+const generateByAI = async () => {
+  if (!aiDescription.value.trim()) {
+    ElMessage.warning('请输入接口描述')
+    return
+  }
+
+  aiLoading.value = true
+  try {
+    const res = await generateCases(aiDescription.value)
+    aiGeneratedCases.value = res.cases || []
+    if (aiGeneratedCases.value.length > 0) {
+      aiCaseIndex.value = 0
+      ElMessage.success(`成功生成 ${aiGeneratedCases.value.length} 条用例`)
+    } else {
+      ElMessage.warning('未生成用例，请尝试更详细的描述')
+    }
+  } catch (error) {
+    console.error('AI 生成失败:', error)
+    ElMessage.error(error.response?.data?.detail || '生成失败，请重试')
+  } finally {
+    aiLoading.value = false
+  }
+}
+
+// 应用选中的用例到表单
+const applyAICase = () => {
+  const selectedCase = aiGeneratedCases.value[aiCaseIndex.value]
+  if (!selectedCase) {
+    ElMessage.warning('请先选择一条用例')
+    return
+  }
+
+  // 映射字段到表单
+  form.name = selectedCase.name || ''
+  form.url = selectedCase.url || ''
+  form.method = selectedCase.method || 'GET'
+  form.expected_status = selectedCase.expected_status || 200
+  form.assert_type = selectedCase.assert_type || 'contains'
+  form.assert_target = selectedCase.assert_target || ''
+
+  if (form.assert_type === 'contains') {
+    form.expected_response = selectedCase.expected_response || ''
+    form.expected_value = ''
+  } else if (form.assert_type === 'jsonpath') {
+    form.expected_value = selectedCase.expected_response || ''
+    form.expected_response = ''
+  }
+
+  aiDialogVisible.value = false
+  ElMessage.success('已填充表单，请确认后保存')
+}
+
+// 修改打开弹窗时自动触发生成（可选）
+const openAIDialogAndGenerate = async () => {
+  await openAIDialog()
+  // 可以自动调用一次生成，也可以等用户输入后手动点击
 }
 
 onMounted(() => {

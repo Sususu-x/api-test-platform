@@ -9,6 +9,7 @@ venv/
 .env
 *.db
 *.sqlite3
+backend/.env
 
 # Allure 报告
 backend/allure_results/

@@ -8,6 +8,7 @@ import models
 from routers import case_router
 import time
 from sqlalchemy import text
+from routers import ai_router
 
 
 models.Base.metadata.create_all(bind=engine)
@@ -48,6 +49,9 @@ app.include_router(environment_router.router)
 
 # 挂载Allure报告目录为静态文件
 app.mount("/allure-report", StaticFiles(directory="allure_report", html=True), name="allure_report")
+
+
+app.include_router(ai_router.router)
 
 @app.get("/")
 def root():
